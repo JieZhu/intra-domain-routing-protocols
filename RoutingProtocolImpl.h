@@ -26,6 +26,12 @@ struct DV_Entry {
   unsigned short next_hop;
 };
 
+struct LS_Info{
+    unsigned short destinatin_id;
+    unsigned short cost;
+    unsigned short next_hop_id;
+};
+
 class RoutingProtocolImpl : public RoutingProtocol {
   public:
     RoutingProtocolImpl(Node *n);
@@ -86,13 +92,17 @@ class RoutingProtocolImpl : public RoutingProtocol {
     /* router ID and neighbor LS_Entry */
     //hash_map<unsigned short, vector<LS_Entry*>*> ls_table;
     unsigned int sequence_num;
+
     /* router ID and DV_Entry */
     hash_map<unsigned short, DV_Entry*> dv_table;
     /* destination id and forwarding_table_entry */
     hash_map<unsigned short, Forwarding_Table_Entry*> forwarding_table;
     /* router id and neighbor ls_entry */
     hash_map<unsigned short, vector<LS_Entry*>*> ls_table;
+    
+    vector<LS_Entry*> *linkSt;
 
+    hash_map<unsigned short, unsigned int> ls_sequence_num;
     Node *sys; // To store Node object; used to access GSR9999 interfaces
     unsigned short num_ports;
     unsigned short router_id;
@@ -107,16 +117,21 @@ class RoutingProtocolImpl : public RoutingProtocol {
     void handle_data_packet();
     void handle_ping_packet(unsigned short port_id, void* packet, unsigned short size);
     void handle_pong_packet(unsigned short port_id, void* packet);
-    void handle_ls_packet();
+    void handle_ls_packet(unsigned short port_id, void* packet, unsigned short size);
     void handle_dv_packet();
 
     bool check_packet_size(void* packet, unsigned short size);
     bool check_dest_id(void* packet);
+    bool check_lsp_sequence_num(void* packet);
 
     void update_port_stat();
     void update_ls_stat();
     void update_dv_stat();
+
+    void compute_ls_forwarding_table();
 };
 
 #endif
+
+
 

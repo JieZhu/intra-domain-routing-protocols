@@ -89,9 +89,9 @@ class RoutingProtocolImpl : public RoutingProtocol {
     /* destination ID and next_hop */
     hash_map<unsigned short, unsigned short> routing_table;
     DVTable dv_table;
-    LSTable ls_table;
-    // hash_map<unsigned short, vector<LS_Entry*>*> ls_table;
-    // vector<LS_Entry*> *linkSt;
+    //    LSTable ls_table;
+     hash_map<unsigned short, vector<LS_Entry*>*> ls_table;
+     vector<LS_Entry*> *linkSt;
 
 
     hash_map<unsigned short, unsigned int> ls_sequence_num; 
@@ -112,7 +112,7 @@ class RoutingProtocolImpl : public RoutingProtocol {
     void recv_data_packet();
     void recv_ping_packet(unsigned short port_id, char* packet, unsigned short size);
     void recv_pong_packet(unsigned short port_id, char* packet);
-    void recv_ls_packet();
+    void recv_ls_packet(unsigned short port_id, char* packet, unsigned short size);
     void recv_dv_packet(char* packet, unsigned short size);
 
     bool check_packet_size(char* packet, unsigned short size);
@@ -122,6 +122,7 @@ class RoutingProtocolImpl : public RoutingProtocol {
     void send_ls_packet();
 
     void compute_ls_forwarding_table();
+    bool check_lsp_sequence_num(void* packet);
 
 };
 

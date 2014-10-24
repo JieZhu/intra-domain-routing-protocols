@@ -34,15 +34,16 @@ void RoutingProtocolImpl::init(unsigned short num_ports, unsigned short router_i
 
   if (protocol_type == P_LS) {
     sequence_num = 0;
-//    linkSt = new vector<LS_Entry*>;
-//        for (hash_map<unsigned short, Port*>::iterator iter = ports.begin(); iter != ports.end(); ++iter) {
-//            Port* port = iter->second;
-//            LS_Entry *entry = (struct LS_Entry*)malloc(sizeof(struct LS_Entry));
-//            entry->neighbor_id = (unsigned short)htons(port->neighbor_id);
-//            entry->cost = (unsigned short)htons(port->cost);
-//            entry->time_to_expire = sys->time() + LS_TIMEOUT;
-//            linkSt->push_back(entry);
-//        }
+    linkSt = new vector<LS_Entry*>;
+        for (hash_map<unsigned short, Port*>::iterator iter = ports.begin(); iter != ports.end(); ++iter) {
+            Port* port = iter->second;
+            LS_Entry *entry = (struct LS_Entry*)malloc(sizeof(struct LS_Entry));
+            entry->neighbor_id = (unsigned short)htons(port->neighbor_id);
+            entry->cost = (unsigned short)htons(port->cost);
+            entry->time_to_expire = sys->time() + LS_TIMEOUT;
+            linkSt->push_back(entry);
+        }
+//    ls_table.getLinkState(ports);
     sys->set_alarm(this, LS_DURATION, (void*)&LS_ALARM);
   } else {
     sys->set_alarm(this, DV_DURATION, (void*)&DV_ALARM);
@@ -89,7 +90,7 @@ void RoutingProtocolImpl::recv(unsigned short port, void *packet, unsigned short
     recv_pong_packet(port, (char*)packet);
     break;
   case LS:
-    recv_ls_packet();
+    recv_ls_packet(port, (char*)packet, size);
     break;
   case DV:
     recv_dv_packet((char*)packet, size);
@@ -237,7 +238,7 @@ void RoutingProtocolImpl::recv_pong_packet(unsigned short port_id, char* packet)
   }
 }
 
-void RoutingProtocolImpl::recv_ls_packet() {
+void RoutingProtocolImpl::recv_ls_packet(unsigned short port_id, char* packet, unsigned short size) {
   /*if from self, just ignore the packet and free the packet*/
     if(port_id == 0xffff){
         free(packet);
@@ -350,7 +351,9 @@ void RoutingProtocolImpl::compute_ls_forwarding_table(){
     //destination id and LS_info
     hash_map<unsigned short, LS_Info*> tentative;
 
-    forwarding_table.clear();
+//    forwarding_table.clear();
+    routing_table.clear();
+    
     if(!linkSt->empty()){
         for (vector<LS_Entry*>::iterator it=linkSt->begin(); it != linkSt->end(); it++) {
             struct LS_Info *lin = (struct LS_Info*)malloc(sizeof(struct LS_Info));
@@ -377,10 +380,12 @@ void RoutingProtocolImpl::compute_ls_forwarding_table(){
 
         tentative.erase(min->destinatin_id);
 
-        struct Forwarding_Table_Entry *f_entry = (struct Forwarding_Table_Entry*) malloc(sizeof(struct Forwarding_Table_Entry));
-        f_entry->dest_id = dest;
-        f_entry->next_hop = next;
-        forwarding_table[dest] = f_entry;
+//        struct Forwarding_Table_Entry *f_entry = (struct Forwarding_Table_Entry*) malloc(sizeof(struct Forwarding_Table_Entry));
+//        f_entry->dest_id = dest;
+//        f_entry->next_hop = next;
+//        forwarding_table[dest] = f_entry;
+        
+        routing_table[dest] = next;
 
         hash_map<unsigned short, vector<LS_Entry*>*>::iterator iter = ls_table.find(dest);
 
@@ -402,7 +407,7 @@ void RoutingProtocolImpl::compute_ls_forwarding_table(){
                             tentative[(*it)->neighbor_id] = temp;
                         }
                     }else{
-                        if((!forwarding_table[(*it)->neighbor_id]) && (router_id != (*it)->neighbor_id) )
+                        if((!routing_table[(*it)->neighbor_id]) && (router_id != (*it)->neighbor_id) )
                             tentative[(*it)->neighbor_id] = temp;
                         
                     }
@@ -422,4 +427,16 @@ void RoutingProtocolImpl::compute_ls_forwarding_table(){
     }
     
     
+}
+
+bool RoutingProtocolImpl::check_lsp_sequence_num(void* packet) {
+    unsigned short source_id = (unsigned short)ntohs(*(unsigned short*)((char*)packet + 4));
+    unsigned int sequence_num = (unsigned int)ntohl(*(unsigned int*)((char*)packet + 8));
+    
+    if((ls_sequence_num.find(source_id)==ls_sequence_num.end())||ls_sequence_num[source_id]<sequence_num){
+        ls_sequence_num[source_id]=sequence_num;
+        return true;
+    }
+    else
+        return false;
 }

@@ -37,7 +37,11 @@ public:
     void update_ls_package(unsigned short port_id, char* packet, unsigned short size);
     bool check_lsp_sequence_num(void* packet);
     
-    void compute_ls_routing_table(unsigned short router_id, hash_map<unsigned short, unsigned short>& routing_table);
+    void compute_ls_routing_table(hash_map<unsigned short, unsigned short>& routing_table);
+    
+    void set_ls_package(char* packet, unsigned short packet_size, hash_map<unsigned short, Port*> ports);
+    
+    void increase_seq();
     
 private:
     

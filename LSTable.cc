@@ -56,7 +56,7 @@ void LSTable::update(unsigned short router_id, hash_map<unsigned short, Port*> p
         LS_Entry *entry = (struct LS_Entry*)malloc(sizeof(struct LS_Entry));
         entry->neighbor_id = (unsigned short)htons(port->neighbor_id);
         entry->cost = (unsigned short)htons(port->cost);
-        entry->time_to_expire = sys->time() + LS_TIMEOUT;
+//        entry->time_to_expire = sys->time() + LS_TIMEOUT;
         linkst->push_back(entry);
     }
 }
@@ -106,7 +106,7 @@ bool LSTable::check_lsp_sequence_num(void* packet) {
         return false;
 }
 
-void LSTable::compute_ls_routing_table(unsigned short router_id ,hash_map<unsigned short, unsigned short>& routing_table){
+void LSTable::compute_ls_routing_table(hash_map<unsigned short, unsigned short>& routing_table){
     
     //destination id and LS_info
     hash_map<unsigned short, LS_Info*> tentative;
@@ -181,4 +181,25 @@ void LSTable::compute_ls_routing_table(unsigned short router_id ,hash_map<unsign
         free(ls_info);
     }
     
+}
+
+void LSTable::set_ls_package(char* packet, unsigned short packet_size, hash_map<unsigned short, Port*> ports){
+            *(char*)packet = LS;
+            *(unsigned short*)(packet + 2) = (unsigned short)htons(packet_size);
+            *(unsigned short*)(packet + 4) = (unsigned short)htons(router_id);
+            *(unsigned int*)(packet + 8) = (unsigned int)htonl(sequence_num);
+            /* get neighbor ID and cost from ports */
+            int count = 0;
+            for (hash_map<unsigned short, Port*>::iterator iter_j = ports.begin(); iter_j != ports.end(); ++iter_j) {
+                int offset = 12 + (count<<2);
+                Port* port = iter_j->second;
+                *(unsigned short*)((char*)packet + offset) = (unsigned short)htons(port->neighbor_id);
+                *(unsigned short*)((char*)packet + offset + 2) = (unsigned short)htons(port->cost);
+                count++;
+            }
+
+}
+
+void LSTable::increase_seq(){
+    sequence_num++;
 }

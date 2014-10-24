@@ -134,7 +134,7 @@ void RoutingProtocolImpl::handle_check_alarm() {
             send_ls_packet();
         }
         if(port_update || ls_upate)
-            ls_table.compute_ls_routing_table(router_id, routing_table);
+            ls_table.compute_ls_routing_table(routing_table);
         
     } else {
         bool dv_update = dv_table.check_dv_state(sys->time(), routing_table);
@@ -267,8 +267,7 @@ void RoutingProtocolImpl::recv_ls_packet(unsigned short port_id, char* packet, u
     }
     
     free(packet);
-//    compute_ls_forwarding_table();
-    ls_table.compute_ls_routing_table(<#unsigned short router_id#>, <#hash_map<unsigned short, unsigned short> &routing_table#>);
+    ls_table.compute_ls_routing_table(routing_table);
 }
 
 void RoutingProtocolImpl::recv_dv_packet(char* packet, unsigned short size) {
@@ -304,24 +303,11 @@ void RoutingProtocolImpl::send_ls_packet() {
     for (hash_map<unsigned short, Port*>::iterator iter_i = ports.begin(); iter_i != ports.end(); ++iter_i) {
         char* packet = (char*)malloc(packet_size);
         ls_table.set_ls_package(packet, packet_size, ports);
-//        *(char*)packet = LS;
-//        *(unsigned short*)(packet + 2) = (unsigned short)htons(packet_size);
-//        *(unsigned short*)(packet + 4) = (unsigned short)htons(router_id);
-//        *(unsigned int*)(packet + 8) = (unsigned int)htonl(sequence_num);
-//        /* get neighbor ID and cost from ports */
-//        int count = 0;
-//        for (hash_map<unsigned short, Port*>::iterator iter_j = ports.begin(); iter_j != ports.end(); ++iter_j) {
-//            int offset = 12 + 4 * count;
-//            Port* port = iter_j->second;
-//            *(unsigned short*)((char*)packet + offset) = (unsigned short)htons(port->neighbor_id);
-//            *(unsigned short*)((char*)packet + offset + 2) = (unsigned short)htons(port->cost);
-//            count++;
-//        }
         
+        //iter->first == portnum???
         sys->send(iter_i->first, packet, packet_size);
     }
     ls_table.increase_seq();
-//    sequence_num++;
 }
 
 void RoutingProtocolImpl::send_dv_packet() {

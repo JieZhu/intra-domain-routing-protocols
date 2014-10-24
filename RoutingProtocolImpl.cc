@@ -1,7 +1,7 @@
 #include "RoutingProtocolImpl.h"
 #include <arpa/inet.h>
 #include "Node.h"
-#include "string.h"
+#include "DVTable.h"
 
 const char RoutingProtocolImpl::PING_ALARM = 8;
 const char RoutingProtocolImpl::LS_ALARM = 9;
@@ -9,284 +9,236 @@ const char RoutingProtocolImpl::DV_ALARM = 10;
 const char RoutingProtocolImpl::CHECK_ALARM = 11;
 
 RoutingProtocolImpl::RoutingProtocolImpl(Node *n) : RoutingProtocol(n) {
-    sys = n;
+  sys = n;
 }
 
 RoutingProtocolImpl::~RoutingProtocolImpl() {
-    /* release memory for ports */
-    hash_map<unsigned short, Port*>::iterator port_iter = ports.begin();
-    
-    while (port_iter != ports.end()) {
-        Port* port = port_iter->second;
-        ports.erase(port_iter++);
-        free(port);
-    }
-    
-    /* release memory for dv_table */
-    hash_map<unsigned short, DV_Entry*>::iterator dv_iter = dv_table.begin();
-    
-    while (dv_iter != dv_table.end()) {
-        DV_Entry* dv_entry = dv_iter->second;
-        dv_table.erase(dv_iter++);
-        free(dv_entry);
-    }
-    
-    /* release memory for ls_table */
-    /*hash_map<unsigned short, LS_Entry*>::iterator ls_iter = ls_table.begin();
-     
-     while (ls_iter != ls_table.end()) {
-     LS_Entry* ls_entry = ls_iter->second;
-     ls_table.erase(ls_iter++);
-     free(ls_entry);
-     }*/
+  /* release memory for ports */
+  hash_map<unsigned short, Port*>::iterator iter = ports.begin();
+
+  while (iter != ports.end()) {
+    Port* port = iter->second;
+    ports.erase(iter++);
+    free(port);
+  }
 }
 
 void RoutingProtocolImpl::init(unsigned short num_ports, unsigned short router_id, eProtocolType protocol_type) {
-    this->num_ports = num_ports;
-    this->router_id = router_id;
-    this->protocol_type = protocol_type;
-    
-    /* first ping message sent at 0 second */
-    sys->set_alarm(this, 0, (void*)&PING_ALARM);
-    sys->set_alarm(this, CHECK_DURATION, (void*)&CHECK_ALARM);
-    
-    if (protocol_type == P_LS) {
-        sequence_num = 0;
-        linkSt = new vector<LS_Entry*>;
-        for (hash_map<unsigned short, Port*>::iterator iter = ports.begin(); iter != ports.end(); ++iter) {
-            Port* port = iter->second;
-            LS_Entry *entry = (struct LS_Entry*)malloc(sizeof(struct LS_Entry));
-            entry->neighbor_id = (unsigned short)htons(port->neighbor_id);
-            entry->cost = (unsigned short)htons(port->cost);
-            entry->time_to_expire = sys->time() + LS_TIMEOUT;
-            linkSt->push_back(entry);
-        }
-     
-        sys->set_alarm(this, LS_DURATION, (void*)&LS_ALARM);
-        
-    } else {
-        sys->set_alarm(this, DV_DURATION, (void*)&DV_ALARM);
-    }
-    
+  this->num_ports = num_ports;
+  this->router_id = router_id;
+  this->protocol_type = protocol_type;
+
+  /* first ping message sent at 0 second */
+  sys->set_alarm(this, 0, (void*)&PING_ALARM);
+  sys->set_alarm(this, CHECK_DURATION, (void*)&CHECK_ALARM);
+
+  if (protocol_type == P_LS) {
+    sequence_num = 0;
+//    linkSt = new vector<LS_Entry*>;
+//        for (hash_map<unsigned short, Port*>::iterator iter = ports.begin(); iter != ports.end(); ++iter) {
+//            Port* port = iter->second;
+//            LS_Entry *entry = (struct LS_Entry*)malloc(sizeof(struct LS_Entry));
+//            entry->neighbor_id = (unsigned short)htons(port->neighbor_id);
+//            entry->cost = (unsigned short)htons(port->cost);
+//            entry->time_to_expire = sys->time() + LS_TIMEOUT;
+//            linkSt->push_back(entry);
+//        }
+    sys->set_alarm(this, LS_DURATION, (void*)&LS_ALARM);
+  } else {
+    sys->set_alarm(this, DV_DURATION, (void*)&DV_ALARM);
+  }
 }
 
 void RoutingProtocolImpl::handle_alarm(void *data) {
-    char alarm_type = *(char*)data;
-    switch (alarm_type) {
-        case PING_ALARM:
-            handle_ping_alarm();
-            break;
-        case LS_ALARM:
-            handle_ls_alarm();
-            break;
-        case DV_ALARM:
-            handle_dv_alarm();
-            break;
-        case CHECK_ALARM:
-            handle_check_alarm();
-            break;
-        default:
-            break;
-    }
+  char alarm_type = *(char*)data;
+  switch (alarm_type) {
+  case PING_ALARM:
+    handle_ping_alarm();
+    break;
+  case LS_ALARM:
+    handle_ls_alarm();
+    break;
+  case DV_ALARM:
+    handle_dv_alarm();
+    break;
+  case CHECK_ALARM:
+    handle_check_alarm();
+    break;
+  default:
+    break;
+  }
 }
 
 void RoutingProtocolImpl::recv(unsigned short port, void *packet, unsigned short size) {
-    if (!check_packet_size(packet, size)) {
-        cerr << "[ERROR] The router " << router_id << " received a packet with a wrong packet size at time "
-        << sys->time() / 1000.0 << endl;
-        free(packet);
-        return;
-    }
-    
-    char packet_type = *(char*)packet;
-    //  cout << "size: " << sizeof(ePacketType) << endl;
-    //  cout << "type: " << (unsigned short)packet_type << endl;
-    switch (packet_type) {
-        case DATA:
-            handle_data_packet();
-            break;
-        case PING:
-            handle_ping_packet(port, packet, size);
-            break;
-        case PONG:
-            handle_pong_packet(port, packet);
-            break;
-        case LS:
-            handle_ls_packet(port, packet, size);
-            break;
-        case DV:
-            handle_dv_packet();
-            break;
-        default:
-            break;
-    }
+  if (!check_packet_size((char*)packet, size)) {
+    cerr << "[ERROR] The router " << router_id << " received a packet with a wrong packet size at time "
+         << sys->time() / 1000.0 << endl;
+    free(packet);
+    return;
+  }
+
+  char packet_type = *(char*)packet;
+  switch (packet_type) {
+  case DATA:
+    recv_data_packet();
+    break;
+  case PING:
+    recv_ping_packet(port, (char*)packet, size);
+    break;
+  case PONG:
+    recv_pong_packet(port, (char*)packet);
+    break;
+  case LS:
+    recv_ls_packet();
+    break;
+  case DV:
+    recv_dv_packet((char*)packet, size);
+    break;
+  default:
+    break;
+  }
 }
 
 void RoutingProtocolImpl::handle_ping_alarm() {
-    unsigned short packet_size = 12;
-    
-    /* send ping packet to all ports */
-    for (int i = 0; i < num_ports; ++i) {
-        char* packet = (char*)malloc(packet_size);
-        *(ePacketType*)packet = PING;
-        *(unsigned short*)(packet + 2) = (unsigned short)htons(packet_size);
-        *(unsigned short*)(packet + 4) = (unsigned short)htons(router_id);
-        *(unsigned int*)(packet + 8) = (unsigned int)htonl(sys->time());
-        
-        sys->send(i, packet, packet_size);
-    }
-    
-    sys->set_alarm(this, PING_DURATION, (void*)&PING_ALARM);
+  unsigned short packet_size = 12;
+
+  /* send ping packet to all ports */
+  for (int i = 0; i < num_ports; ++i) {
+    char* packet = (char*)malloc(packet_size);
+    *packet = (char)PING;
+    *(unsigned short*)(packet + 2) = (unsigned short)htons(packet_size);
+    *(unsigned short*)(packet + 4) = (unsigned short)htons(router_id);
+    *(unsigned int*)(packet + 8) = (unsigned int)htonl(sys->time());
+
+    sys->send(i, packet, packet_size);
+  }
+
+  sys->set_alarm(this, PING_DURATION, (void*)&PING_ALARM);
 }
 
 void RoutingProtocolImpl::handle_ls_alarm() {
-    unsigned short packet_size = 12 + 4 * ports.size();
-    
-    /* flood */
-    for (hash_map<unsigned short, Port*>::iterator iter_i = ports.begin(); iter_i != ports.end(); ++iter_i) {
-        char* packet = (char*)malloc(packet_size);
-        *(char*)packet = LS;
-        *(unsigned short*)(packet + 2) = (unsigned short)htons(packet_size);
-        *(unsigned short*)(packet + 4) = (unsigned short)htons(router_id);
-        *(unsigned int*)(packet + 8) = (unsigned int)htonl(sequence_num);
-        /* get neighbor ID and cost from ports */
-        int count = 0;
-        for (hash_map<unsigned short, Port*>::iterator iter_j = ports.begin(); iter_j != ports.end(); ++iter_j) {
-            int offset = 12 + 4 * count;
-            Port* port = iter_j->second;
-            *(unsigned short*)((char*)packet + offset) = (unsigned short)htons(port->neighbor_id);
-            *(unsigned short*)((char*)packet + offset + 4) = (unsigned short)htons(port->cost);
-            count++;
-        }
-        
-        sys->send(iter_i->first, packet, packet_size);
-    }
-    sequence_num++;
-    sys->set_alarm(this, LS_DURATION, (void*)&LS_ALARM);
+  send_ls_packet();
+  sys->set_alarm(this, LS_DURATION, (void*)&LS_ALARM);
 }
 
 void RoutingProtocolImpl::handle_dv_alarm() {
-    unsigned short packet_size = 8 + 4 * dv_table.size();
-    
-    /* send dv to neighbors */
-    for (hash_map<unsigned short, Port*>::iterator iter = ports.begin(); iter != ports.end(); ++iter) {
-        char* packet = (char*)malloc(packet_size);
-        *(ePacketType*)packet = DV;
-        *(unsigned short*)(packet + 2) = (unsigned short)htons(packet_size);
-        *(unsigned short*)(packet + 4) = (unsigned short)htons(router_id);
-        *(unsigned short*)(packet + 6) = (unsigned short)htons(iter->second->neighbor_id);
-        
-        /* get router ID and cost from dv_table */
-        int count = 0;
-        for (hash_map<unsigned short, DV_Entry*>::iterator dv_iter = dv_table.begin(); dv_iter != dv_table.end(); ++dv_iter) {
-            int offset = 8 + 4 * count;
-            DV_Entry* entry = dv_iter->second;
-            
-            /* poison reverse */
-            int cost = (iter->second->neighbor_id == entry->next_hop) ? INFINITY_COST : entry->cost;
-            *(unsigned short*)(packet + offset) = (unsigned short)htons(dv_iter->first);
-            *(unsigned short*)(packet + offset + 4) = (unsigned short)htons(cost);
-        }
-        sys->send(iter->first, packet, packet_size);
-    }
-    
-    sys->set_alarm(this, DV_DURATION, (void*)&DV_ALARM);
+  send_dv_packet();
+  sys->set_alarm(this, DV_DURATION, (void*)&DV_ALARM);
 }
 
 void RoutingProtocolImpl::handle_check_alarm() {
-    update_port_stat();
-    
-    switch (protocol_type) {
-        case P_LS:
-            update_ls_stat();
-            break;
-        case P_DV:
-            update_dv_stat();
-            break;
-        default:
-            break;
-    }
-    
-    sys->set_alarm(this, CHECK_DURATION, (void*)&CHECK_ALARM);
-}
+  bool port_update = check_port_state();
 
-void RoutingProtocolImpl::update_port_stat() {
-    hash_map<unsigned short, Port*>::iterator iter = ports.begin();
-    
-    while (iter != ports.end()) {
-        Port* port = iter->second;
-        if (sys->time() > port->time_to_expire) {
-            ports.erase(iter++);
-            free(port);
-        } else {
-            ++iter;
-        }
-    }
-}
+  if (protocol_type == P_LS) {
+    // bool ls_upate = ls_table.check_ls_state();
+    //    bool ls_upate = false;
 
-void RoutingProtocolImpl::update_ls_stat() {
-    
-        linkSt->clear();
-    for (hash_map<unsigned short, Port*>::iterator iter = ports.begin(); iter != ports.end(); ++iter) {
-        Port* port = iter->second;
-        LS_Entry *entry = (struct LS_Entry*)malloc(sizeof(struct LS_Entry));
-        entry->neighbor_id = (unsigned short)htons(port->neighbor_id);
-        entry->cost = (unsigned short)htons(port->cost);
-        entry->time_to_expire = sys->time() + LS_TIMEOUT;
-        linkSt->push_back(entry);
+    if (port_update) {
+      linkSt->clear();
+        for (hash_map<unsigned short, Port*>::iterator iter = ports.begin(); iter != ports.end(); ++iter) {
+          Port* port = iter->second;
+          LS_Entry *entry = (struct LS_Entry*)malloc(sizeof(struct LS_Entry));
+          entry->neighbor_id = (unsigned short)htons(port->neighbor_id);
+          entry->cost = (unsigned short)htons(port->cost);
+          entry->time_to_expire = sys->time() + LS_TIMEOUT;
+          linkSt->push_back(entry);
+      }
+    // flooding port info to all other nodes;
+    // handle_ls_alarm();
     }
-    
     compute_ls_forwarding_table();
-    
-}
 
-void RoutingProtocolImpl::update_dv_stat() {
-    
-}
+  } else {
+    bool dv_update = dv_table.check_dv_state(sys->time(), routing_table);
 
-
-void RoutingProtocolImpl::handle_data_packet() {
-    
-//    unsigned short dest_id = (unsigned short)ntohs( *(unsigned short*)((char*)packet + 6) );
-//    unsigned short next_hop = forwarding_table[dest_id]->next_hop;
-    
-    
-    
-}
-
-void RoutingProtocolImpl::handle_ping_packet(unsigned short port_id, void* packet, unsigned short size) {
-    unsigned short dest_id = (unsigned short)ntohs(*(unsigned short*)((char*)packet + 4));
-    
-    *(char*)packet = (char)PONG;
-    *(unsigned short*)((char*)packet + 4) = (unsigned short)htons(router_id);
-    *(unsigned short*)((char*)packet + 6) = (unsigned short)htons(dest_id);
-    
-    sys->send(port_id, packet, size);
-}
-
-void RoutingProtocolImpl::handle_pong_packet(unsigned short port_id, void* packet) {
-    if (!check_dest_id(packet)) {
-        cerr << "[ERROR] The router " << router_id << " received a PONG packet with a wrong destination ID at time "
-        << sys->time() / 1000.0 << endl;
-        free(packet);
-        return;
+    if (port_update || dv_update) {
+      send_dv_packet();
     }
-    
-    unsigned int timestamp = (unsigned int)ntohl(*(unsigned int*)((char*)packet + 8));
-    unsigned short neighbor_id = (unsigned short)ntohs(*(unsigned short*)((char*)packet + 4));
-    
-    Port* port = (Port*)malloc(sizeof(Port));
-    /* impossible to overflow because PONG_TIMEOUT is only 15 seconds */
-    port->cost = (short)(sys->time() - timestamp);
-    port->time_to_expire = sys->time() + PONG_TIMEOUT;
-    port->neighbor_id = neighbor_id;
-    ports[port_id] = port;
-    
-    free(packet);
+  }
+
+  sys->set_alarm(this, CHECK_DURATION, (void*)&CHECK_ALARM);
 }
 
-void RoutingProtocolImpl::handle_ls_packet(unsigned short port_id, void* packet, unsigned short size) {
-    /*if from self, just ignore the packet and free the packet*/
+bool RoutingProtocolImpl::check_port_state() {
+  bool update = false;
+  hash_map<unsigned short, Port*>::iterator iter = ports.begin();
+  vector<unsigned short> deleted_dst_ids;
+
+  while (iter != ports.end()) {
+    Port* port = iter->second;
+    if (sys->time() > port->time_to_expire) {
+      update = true;
+      deleted_dst_ids.push_back(port->neighbor_id);
+      ports.erase(iter++);
+      free(port);
+    } else {
+      ++iter;
+    }
+  }
+
+  if (update) {
+    if (protocol_type == P_LS) {
+
+    } else {
+      dv_table.delete_dv(deleted_dst_ids, routing_table);
+    }
+  }
+
+  return update;
+}
+
+void RoutingProtocolImpl::recv_data_packet() {
+
+}
+
+void RoutingProtocolImpl::recv_ping_packet(unsigned short port_id, char* packet, unsigned short size) {
+  unsigned short dest_id = (unsigned short)ntohs(*(unsigned short*)((char*)packet + 4));
+
+  *packet = (char)PONG;
+  *(unsigned short*)(packet + 4) = (unsigned short)htons(router_id);
+  *(unsigned short*)(packet + 6) = (unsigned short)htons(dest_id);
+
+  sys->send(port_id, packet, size);
+}
+
+void RoutingProtocolImpl::recv_pong_packet(unsigned short port_id, char* packet) {
+  if (!check_dst_id(packet)) {
+    cerr << "[ERROR] The router " << router_id << " received a PONG packet with a wrong destination ID at time "
+         << sys->time() / 1000.0 << endl;
+    free(packet);
+    return;
+  }
+
+  unsigned int timestamp = (unsigned int)ntohl(*(unsigned int*)(packet + 8));
+  unsigned short src_id = (unsigned short)ntohs(*(unsigned short*)(packet + 4));
+  unsigned short cost = (short)(sys->time() - timestamp);
+  unsigned int time_to_expire = sys->time() + PONG_TIMEOUT;
+  free(packet);
+
+  hash_map<unsigned short, Port*>::iterator iter = ports.find(port_id);
+
+  if (iter != ports.end()) {
+    Port* port = iter->second;
+    port->time_to_expire = time_to_expire;
+  } else {
+    Port* port = (Port*)malloc(sizeof(Port));
+    port->time_to_expire = time_to_expire;
+    port->neighbor_id = src_id;
+    ports[port_id] = port;
+  }
+
+  if (protocol_type == P_LS) {
+    // update linkst;
+
+  } else {
+    if (dv_table.update_by_pong(src_id, cost, sys->time(), routing_table)) {
+      send_dv_packet();
+    }
+  }
+}
+
+void RoutingProtocolImpl::recv_ls_packet() {
+  /*if from self, just ignore the packet and free the packet*/
     if(port_id == 0xffff){
         free(packet);
         cout<<"from self, ignore"<<endl;
@@ -330,31 +282,67 @@ void RoutingProtocolImpl::handle_ls_packet(unsigned short port_id, void* packet,
     compute_ls_forwarding_table();
 }
 
+void RoutingProtocolImpl::recv_dv_packet(char* packet, unsigned short size) {
+  if (!check_dst_id(packet)) {
+    cerr << "[ERROR] The router " << router_id << " received a DV packet with a wrong destination ID at time "
+         << sys->time() / 1000.0 << endl;
+    free(packet);
+    return;
+  }
 
-void RoutingProtocolImpl::handle_dv_packet() {
+  if (dv_table.update_by_dv(packet, size, sys->time(), routing_table)) {
+    send_dv_packet();
+  }
+
+  free(packet);
+}
+
+bool RoutingProtocolImpl::check_packet_size(char* packet, unsigned short size) {
+  unsigned short packet_size = (unsigned short)ntohs(*(unsigned short*)(packet + 2));
+  return (size == packet_size) ? true : false;
+}
+
+bool RoutingProtocolImpl::check_dst_id(char* packet) {
+  unsigned short dest_id = (unsigned short)ntohs(*(unsigned short*)(packet + 6));
+  return (router_id == dest_id) ? true : false;
+}
+
+
+void RoutingProtocolImpl::send_ls_packet() {
+unsigned short packet_size = 12 + 4 * ports.size();
     
-}
-
-bool RoutingProtocolImpl::check_packet_size(void* packet, unsigned short size) {
-    unsigned short packet_size = (unsigned short)ntohs(*(unsigned short*)((char*)packet + 2));
-    return (size == packet_size) ? true : false;
-}
-
-bool RoutingProtocolImpl::check_dest_id(void* packet) {
-    unsigned short dest_id = (unsigned short)ntohs(*(unsigned short*)((char*)packet + 6));
-    return (router_id == dest_id) ? true : false;
-}
-
-bool RoutingProtocolImpl::check_lsp_sequence_num(void* packet) {
-    unsigned short source_id = (unsigned short)ntohs(*(unsigned short*)((char*)packet + 4));
-    unsigned int sequence_num = (unsigned int)ntohl(*(unsigned int*)((char*)packet + 8));
-    
-    if((ls_sequence_num.find(source_id)==ls_sequence_num.end())||ls_sequence_num[source_id]<sequence_num){
-        ls_sequence_num[source_id]=sequence_num;
-        return true;
+    /* flood */
+    for (hash_map<unsigned short, Port*>::iterator iter_i = ports.begin(); iter_i != ports.end(); ++iter_i) {
+        char* packet = (char*)malloc(packet_size);
+        *(char*)packet = LS;
+        *(unsigned short*)(packet + 2) = (unsigned short)htons(packet_size);
+        *(unsigned short*)(packet + 4) = (unsigned short)htons(router_id);
+        *(unsigned int*)(packet + 8) = (unsigned int)htonl(sequence_num);
+        /* get neighbor ID and cost from ports */
+        int count = 0;
+        for (hash_map<unsigned short, Port*>::iterator iter_j = ports.begin(); iter_j != ports.end(); ++iter_j) {
+            int offset = 12 + 4 * count;
+            Port* port = iter_j->second;
+            *(unsigned short*)((char*)packet + offset) = (unsigned short)htons(port->neighbor_id);
+            *(unsigned short*)((char*)packet + offset + 2) = (unsigned short)htons(port->cost);
+            count++;
+        }
+        
+        sys->send(iter_i->first, packet, packet_size);
     }
-    else
-        return false;
+    sequence_num++;
+}
+
+void RoutingProtocolImpl::send_dv_packet() {
+  unsigned short packet_size = 8 + (dv_table.dv_length() << 2);
+
+  for (hash_map<unsigned short, Port*>::iterator iter = ports.begin(); iter != ports.end(); ++iter) {
+    char* packet = (char*)malloc(packet_size);
+    Port* port = iter->second;
+    dv_table.set_dv_packet(packet, router_id, port->neighbor_id, routing_table);
+
+    sys->send(iter->first, packet, packet_size);
+  }
 }
 
 void RoutingProtocolImpl::compute_ls_forwarding_table(){
@@ -394,29 +382,33 @@ void RoutingProtocolImpl::compute_ls_forwarding_table(){
         f_entry->next_hop = next;
         forwarding_table[dest] = f_entry;
 
-        if(!ls_table[dest]->empty())
-        for (vector<LS_Entry*>::iterator it = ls_table[dest]->begin(); it != ls_table[dest]->end(); it++) {
-            unsigned short cost_thru_next = cost + (*it)->cost;
+        hash_map<unsigned short, vector<LS_Entry*>*>::iterator iter = ls_table.find(dest);
 
-            LS_Info *temp = (struct LS_Info*) malloc(sizeof(struct LS_Info));
-            temp->destinatin_id = (*it)->neighbor_id;
-            temp->next_hop_id = min->destinatin_id;
-            temp->cost = cost_thru_next;
-            
-            if (tentative[(*it)->neighbor_id]){
-                if(tentative[(*it)->neighbor_id] && (cost_thru_next < tentative[(*it)->neighbor_id]->cost)){
+        if (iter != ls_table.end()) {
+            if (!iter->second->empty()) {
                 
-                    tentative.erase((*it)->neighbor_id);
-                    tentative[(*it)->neighbor_id] = temp;
+                for (vector<LS_Entry*>::iterator it = iter->second->begin(); it != iter->second->end(); it++){
+                    unsigned short cost_thru_next = cost + (*it)->cost;
+                    
+                    LS_Info *temp = (struct LS_Info*) malloc(sizeof(struct LS_Info));
+                    temp->destinatin_id = (*it)->neighbor_id;
+                    temp->next_hop_id = min->destinatin_id;
+                    temp->cost = cost_thru_next;
+                    
+                    if (tentative[(*it)->neighbor_id]){
+                        if(tentative[(*it)->neighbor_id] && (cost_thru_next < tentative[(*it)->neighbor_id]->cost)){
+                            
+                            tentative.erase((*it)->neighbor_id);
+                            tentative[(*it)->neighbor_id] = temp;
+                        }
+                    }else{
+                        if((!forwarding_table[(*it)->neighbor_id]) && (router_id != (*it)->neighbor_id) )
+                            tentative[(*it)->neighbor_id] = temp;
+                        
+                    }
                 }
-            }else{
-                if((!forwarding_table[(*it)->neighbor_id]) && (router_id != (*it)->neighbor_id) )
-                    tentative[(*it)->neighbor_id] = temp;
-                
             }
-               
-        }
-
+        }    
         
     }
     

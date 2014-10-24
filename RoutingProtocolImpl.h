@@ -5,28 +5,24 @@
 #include "DVTable.h"
 #include "LSTable.h"
 
-struct Port {
-  unsigned int time_to_expire;
-  unsigned short neighbor_id;
-    unsigned short cost; // add a cost field-- jz52@rice.edu
-};
 
-struct LS_Entry { // added by jz52@rice.edu
-  unsigned int time_to_expire;
-  unsigned short neighbor_id;
-  unsigned short cost;
-};
+
+// struct LS_Entry { 
+//   unsigned int time_to_expire;
+//   unsigned short neighbor_id;
+//   unsigned short cost;
+// };
 
 //struct Forwarding_Table_Entry {
 //  unsigned short dest_id;
 //  unsigned short next_hop;
 //};
 
-struct LS_Info{ //add by jz52@rice.edu
-    unsigned short destinatin_id;
-    unsigned short cost;
-    unsigned short next_hop_id;
-};
+//struct LS_Info{ //add by jz52@rice.edu
+//    unsigned short destinatin_id;
+//    unsigned short cost;
+//    unsigned short next_hop_id;
+//};
 
 class RoutingProtocolImpl : public RoutingProtocol {
   public:
@@ -84,17 +80,17 @@ class RoutingProtocolImpl : public RoutingProtocol {
 
     /* port ID and Port */
     hash_map<unsigned short, Port*> ports;
-    unsigned int sequence_num;
+//    unsigned int sequence_num;
 
     /* destination ID and next_hop */
     hash_map<unsigned short, unsigned short> routing_table;
     DVTable dv_table;
-    //    LSTable ls_table;
-     hash_map<unsigned short, vector<LS_Entry*>*> ls_table;
-     vector<LS_Entry*> *linkSt;
+    LSTable ls_table;
+     // hash_map<unsigned short, vector<LS_Entry*>*> ls_table;
+     // vector<LS_Entry*> *linkSt;
 
 
-    hash_map<unsigned short, unsigned int> ls_sequence_num; 
+//    hash_map<unsigned short, unsigned int> ls_sequence_num; 
     Node *sys; // To store Node object; used to access GSR9999 interfaces
     unsigned short num_ports;
     unsigned short router_id;
@@ -109,7 +105,7 @@ class RoutingProtocolImpl : public RoutingProtocol {
     bool check_ls_state();
     bool check_dv_state();
 
-    void recv_data_packet();
+    void recv_data_packet(char* packet, unsigned short size);
     void recv_ping_packet(unsigned short port_id, char* packet, unsigned short size);
     void recv_pong_packet(unsigned short port_id, char* packet);
     void recv_ls_packet(unsigned short port_id, char* packet, unsigned short size);
@@ -121,8 +117,8 @@ class RoutingProtocolImpl : public RoutingProtocol {
     void send_dv_packet();
     void send_ls_packet();
 
-    void compute_ls_forwarding_table();
-    bool check_lsp_sequence_num(void* packet);
+//    void compute_ls_forwarding_table();
+//    bool check_lsp_sequence_num(void* packet);
 
 };
 

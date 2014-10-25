@@ -5,24 +5,10 @@
 #include "DVTable.h"
 #include "LSTable.h"
 
-
-
-// struct LS_Entry { 
-//   unsigned int time_to_expire;
-//   unsigned short neighbor_id;
-//   unsigned short cost;
-// };
-
-//struct Forwarding_Table_Entry {
-//  unsigned short dest_id;
-//  unsigned short next_hop;
-//};
-
-//struct LS_Info{ //add by jz52@rice.edu
-//    unsigned short destinatin_id;
-//    unsigned short cost;
-//    unsigned short next_hop_id;
-//};
+struct Port {
+    unsigned int time_to_expire;
+    unsigned short port_id;
+};
 
 class RoutingProtocolImpl : public RoutingProtocol {
   public:
@@ -70,7 +56,7 @@ class RoutingProtocolImpl : public RoutingProtocol {
 
     /* LS updates every 30 seconds */
     static const unsigned int LS_DURATION = 30000;
-    static const unsigned int LS_TIMEOUT = 45000;
+    
 
     /* DV updates every 30 secondes */
     static const unsigned int DV_DURATION = 30000;
@@ -78,19 +64,14 @@ class RoutingProtocolImpl : public RoutingProtocol {
     /* 1-second check */
     static const unsigned int CHECK_DURATION = 1000;
 
-    /* port ID and Port */
+    /* neighbour ID and Port */
     hash_map<unsigned short, Port*> ports;
-//    unsigned int sequence_num;
 
     /* destination ID and next_hop */
     hash_map<unsigned short, unsigned short> routing_table;
     DVTable dv_table;
     LSTable ls_table;
-     // hash_map<unsigned short, vector<LS_Entry*>*> ls_table;
-     // vector<LS_Entry*> *linkSt;
 
-
-//    hash_map<unsigned short, unsigned int> ls_sequence_num; 
     Node *sys; // To store Node object; used to access GSR9999 interfaces
     unsigned short num_ports;
     unsigned short router_id;

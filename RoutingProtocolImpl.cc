@@ -123,13 +123,13 @@ void RoutingProtocolImpl::handle_check_alarm() {
     if (protocol_type == P_LS) {
         
         //check ls_table entries, delete the expired ones!!!!!!!!
-        bool ls_upate = ls_table.check_ls_state(sys->time()); // to do!
-        if(ls_upate)
+
             ls_table.compute_ls_routing_table(routing_table);
         
         if (port_update) {
             // if port_update -- flood ports info to all nodes and re compute routing table
             send_ls_packet();
+            ls_table.compute_ls_routing_table(routing_table);
         }
         
     } else {
@@ -152,7 +152,7 @@ bool RoutingProtocolImpl::check_port_state() {
         Port* port = iter->second;
         if (sys->time() > port->time_to_expire) {
             update = true;
-            deleted_dst_ids.push_back(iter->first);//neighbour id?
+            deleted_dst_ids.push_back(iter->first);
             ports.erase(iter++);
             free(port);
         } else {
@@ -162,7 +162,7 @@ bool RoutingProtocolImpl::check_port_state() {
     
     if (update) {
         if (protocol_type == P_LS) {
-            ls_table.delete_ls(ports, sys->time());
+            ls_table.delete_ls(sys->time());
             
         } else {
             dv_table.delete_dv(deleted_dst_ids, routing_table);
@@ -187,11 +187,7 @@ void RoutingProtocolImpl::recv_data_packet(char* packet, unsigned short size) {
         hash_map<unsigned short, Port*>::iterator port_iter = ports.find(next_hop);
         
         if (port_iter != ports.end()) {
-            //edited by jz52@rice.edu
-            
-            //            Port* port = port_iter->second;
-            //            sys->send(port->port_id, packet, size);
-            sys->send(port_iter->first, packet, size);
+            sys->send(port_iter->second->port_id, packet, size);
         } else {
             free(packet);
         }
@@ -232,16 +228,17 @@ void RoutingProtocolImpl::recv_pong_packet(unsigned short port_id, char* packet)
         Port* port = (Port*)malloc(sizeof(Port));
         port->time_to_expire = time_to_expire;
         port->neighbor_id = src_id;
-        port->cost = cost;// added by jz52@rice.edu Fri Oct 24
-        
         ports[port_id] = port;
     }
     
     if (protocol_type == P_LS) {
         //flooding out
-        send_ls_packet();
-        ls_table.delete_ls(ports, sys->time());
-//        ls_table.check_ls_state(sys->time());
+        //        add an entry in linkst;
+        if(ls_table.update_by_pong(router_id, cost, sys->time())){
+            send_ls_packet();
+        }
+        ls_table.compute_ls_routing_table(routing_table);
+        //        ls_table.check_ls_state(sys->time());
         
     } else {
         if (dv_table.update_by_pong(src_id, cost, sys->time(), routing_table)) {
@@ -255,10 +252,10 @@ void RoutingProtocolImpl::recv_ls_packet(unsigned short port_id, char* packet, u
     ls_table.update_ls_package(port_id, packet, size);
     
     for (hash_map<unsigned short, Port*>::iterator iter_j = ports.begin(); iter_j != ports.end(); ++iter_j) {
-        if (port_id != iter_j->first){
+        if (port_id != iter_j->second->port_id){
             char* packet_f = (char*)malloc(size);
             memcpy((char*)packet_f,(char*)packet,size);
-            sys->send(iter_j->first, packet_f, size);
+            sys->send(iter_j->second->port_id, packet_f, size);
         }
     }
     
@@ -299,9 +296,7 @@ void RoutingProtocolImpl::send_ls_packet() {
     for (hash_map<unsigned short, Port*>::iterator iter_i = ports.begin(); iter_i != ports.end(); ++iter_i) {
         char* packet = (char*)malloc(packet_size);
         ls_table.set_ls_package(packet, packet_size, ports);
-        
-        //iter->first == portnum???
-        sys->send(iter_i->first, packet, packet_size);
+        sys->send(iter_i->second->port_id, packet, packet_size);
     }
     ls_table.increase_seq();
 }

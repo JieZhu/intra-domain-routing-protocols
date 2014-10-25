@@ -21,8 +21,7 @@ struct LS_Info{ //add by jz52@rice.edu
     unsigned short next_hop_id;
 };
 
-//
-//
+
 class LSTable{
 
 public:
@@ -33,7 +32,7 @@ public:
     bool check_ls_state(unsigned int currentTime);
     
     hash_map<unsigned short, vector<LS_Entry*>*>::iterator find(unsigned short router_id);
-    void update(unsigned short router_id, hash_map<unsigned short, Port*> ports);
+    void delete_ls(hash_map<unsigned short, Port*> ports, unsigned int current_time);
     void update_ls_package(unsigned short port_id, char* packet, unsigned short size);
     bool check_lsp_sequence_num(void* packet);
     

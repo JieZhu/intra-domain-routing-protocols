@@ -23,19 +23,18 @@ void LSTable::insert(unsigned short router_id, vector<LS_Entry*>* vec){
 bool LSTable::check_ls_state(unsigned int current_time){
     
     bool update = false;
+    
+    hash_map<unsigned short, vector<LS_Entry*>*>::iterator it= find(router_id);
+    vector<LS_Entry*>* linkst = it->second;
+    
     hash_map<unsigned short, vector<LS_Entry*>*>::iterator iter = table.begin();
     
     while (iter != table.end()) {
         vector<LS_Entry*>* entry = iter->second;
+        //not finish
         
-        if ((*entry->begin())->time_to_expire < current_time) {
-            update = true;
-
-            table.erase(iter++);
-            free(entry);
-        } else {
-            ++iter;
-        }
+        
+        
         
     }
     
@@ -47,18 +46,16 @@ hash_map<unsigned short, vector<LS_Entry*>*>::iterator LSTable::find(unsigned sh
     return table.find(router_id);
 }
 
-void LSTable::update(unsigned short router_id, hash_map<unsigned short, Port*> ports){
+void LSTable::delete_ls(hash_map<unsigned short, Port*> ports, unsigned int current_time){
     hash_map<unsigned short, vector<LS_Entry*>*>::iterator it= find(router_id);
     vector<LS_Entry*>* linkst = it->second;
-    linkst->clear();
-    for (hash_map<unsigned short, Port*>::iterator iter = ports.begin(); iter != ports.end(); ++iter) {
-        Port* port = iter->second;
-        LS_Entry *entry = (struct LS_Entry*)malloc(sizeof(struct LS_Entry));
-        entry->neighbor_id = (unsigned short)htons(port->neighbor_id);
-        entry->cost = (unsigned short)htons(port->cost);
-//        entry->time_to_expire = sys->time() + LS_TIMEOUT;
-        linkst->push_back(entry);
+    for (vector<LS_Entry*>::iterator iter = linkst->begin(); iter!=linkst->end(); iter++) {
+        if((*iter)->time_to_expire < current_time){
+            free(*iter);
+            linkst->erase(iter);
+        }
     }
+    
 }
 
 void LSTable::update_ls_package(unsigned short port_id, char* packet, unsigned short size){

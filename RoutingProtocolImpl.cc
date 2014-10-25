@@ -34,10 +34,6 @@ void RoutingProtocolImpl::init(unsigned short num_ports, unsigned short router_i
     sys->set_alarm(this, CHECK_DURATION, (void*)&CHECK_ALARM);
     
     if (protocol_type == P_LS) {
-        //        sequence_num = 0;
-        // init ls_stable
-        //    vector<LS_Entry*>* linkst = new std::vector<LS_Entry*>;
-        //    ls_table.insert(router_id, linkst);
         ls_table.init(router_id);
         sys->set_alarm(this, LS_DURATION, (void*)&LS_ALARM);
     } else {
@@ -128,13 +124,13 @@ void RoutingProtocolImpl::handle_check_alarm() {
         
         //check ls_table entries, delete the expired ones!!!!!!!!
         bool ls_upate = ls_table.check_ls_state(sys->time()); // to do!
+        if(ls_upate)
+            ls_table.compute_ls_routing_table(routing_table);
         
         if (port_update) {
             // if port_update -- flood ports info to all nodes and re compute routing table
             send_ls_packet();
         }
-        if(port_update || ls_upate)
-            ls_table.compute_ls_routing_table(routing_table);
         
     } else {
         bool dv_update = dv_table.check_dv_state(sys->time(), routing_table);
@@ -166,8 +162,7 @@ bool RoutingProtocolImpl::check_port_state() {
     
     if (update) {
         if (protocol_type == P_LS) {
-            //update ls_stable[router id]
-            ls_table.update(router_id, ports);
+            ls_table.delete_ls(ports, sys->time());
             
         } else {
             dv_table.delete_dv(deleted_dst_ids, routing_table);
@@ -245,7 +240,8 @@ void RoutingProtocolImpl::recv_pong_packet(unsigned short port_id, char* packet)
     if (protocol_type == P_LS) {
         //flooding out
         send_ls_packet();
-        ls_table.update(router_id, ports);
+        ls_table.delete_ls(ports, sys->time());
+//        ls_table.check_ls_state(sys->time());
         
     } else {
         if (dv_table.update_by_pong(src_id, cost, sys->time(), routing_table)) {
